@@ -21,6 +21,11 @@ interface result {
 	data: any;
 }
 
+interface readResult<T> {
+	data: Uint8Array;
+	dataLength: number;
+	value: T;
+}
 export default {
 	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
 		const url = new URL(request.url);
@@ -40,11 +45,32 @@ export default {
 		const reader = socket.readable.getReader();
 
 		// handshake packet
+		// 1.sent
 		const handshake = handshakePacket();
-		console.log(handshake);
+		console.log(`handshake sent ${handshake}`);
 		await writer.write(handshake);
 		await new Promise((resolve) => setTimeout(resolve, 1000));
+		// 2.receive
+		while (true) {
+			const packet = (await reader.read()) as ReadableStreamReadResult<Uint8Array>;
+			let buf = packet.value;
+			if (buf == undefined) {
+				continue;
+			}
+			console.log(`handshake receive ${buf}`);
 
+			const dataLen = readVarInt(buf);
+			buf = dataLen.data
+			const packetId = readVarInt(buf);
+			buf = packetId.data
+			const statusLen = readVarInt(buf);
+			buf = statusLen.data
+			const statusRaw = new TextDecoder().decode(buf)
+			console.log("raw",statusRaw)
+			const status = JSON.parse(statusRaw)
+			console.log("parsed",status)
+			break
+		}
 		return new Response(`${address}:${port} connected`);
 	},
 } satisfies ExportedHandler<Env>;
@@ -72,9 +98,28 @@ function writeVarInt(value: number): Uint8Array {
 	}
 }
 
-function readVarInt(value: number[]): number {
+function readVarInt(data: Uint8Array): readResult<number> {
 	let position = 0;
-	return 0;
+	let length = 0;
+	let value = 0;
+
+	while (true) {
+		length++;
+		const current = data[position];
+		value = value | (current & (segmentBit << position));
+		if ((current & continueBit) == 0) {
+			break;
+		}
+		position += 7;
+		if (position > 32) {
+			break;
+		}
+	}
+	return {
+		data: data.slice(length),
+		dataLength: length,
+		value: value,
+	};
 }
 
 function handshakePacket(): Uint8Array {
