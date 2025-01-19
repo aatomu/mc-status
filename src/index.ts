@@ -4,6 +4,7 @@ const segmentBit = 0x7f;
 const continueBit = 0x80;
 
 interface result {
+	success: boolean;
 	message: string;
 	data: any;
 }
@@ -54,6 +55,7 @@ export default {
 		const address = params.get('address');
 		if (!address) {
 			return Return({
+				success: false,
 				message: 'address params not found.',
 			} as result);
 		}
