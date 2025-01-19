@@ -150,3 +150,7 @@ function pushUint8(from: Uint8Array, value: number): Uint8Array {
 	new DataView(buf.buffer).setUint8(from.byteLength, value);
 	return buf;
 }
+
+async function sleep(ms: number): Promise<unknown> {
+	return new Promise((resolve) => setTimeout(resolve, 1000));
+}
