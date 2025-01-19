@@ -8,6 +8,40 @@ interface result {
 	data: any;
 }
 
+// https://developers.cloudflare.com/1.1.1.1/encryption/dns-over-https/make-api-requests/dns-json/#response-fields
+interface DNSresolve {
+	// https://www.iana.org/assignments/dns-parameters/dns-parameters.xhtml#dns-parameters-6
+	Status: number;
+	// Truncated bit
+	TC: boolean;
+	// Recursive Desired bit
+	RD: boolean;
+	// Recursion Available bit
+	RA: boolean;
+	// All records verified DNSSEC
+	AD: boolean;
+	// Client asked to disable DNSSEC validation
+	CD: boolean;
+	Question: {
+		name: string;
+		// Ask DNS record type
+		// https://www.iana.org/assignments/dns-parameters/dns-parameters.xhtml#dns-parameters-4
+		type: number;
+	}[];
+	Answer: DNSrecord[] | undefined; // Record Answer
+	Authority: DNSrecord[] | undefined; // Domain record authority (when Answer not found)
+	Additional: DNSrecord[] | undefined; // Record additional information
+}
+
+interface DNSrecord {
+	name: string;
+	// record type
+	// https://www.iana.org/assignments/dns-parameters/dns-parameters.xhtml#dns-parameters-4
+	type: number;
+	TTL: number;
+	data: string;
+}
+
 interface readResult<T> {
 	data: Uint8Array;
 	dataLength: number;
@@ -25,44 +59,90 @@ export default {
 		}
 		const port = params.get('port') || '25565';
 
-		// dial tcp
-		const addr = { hostname: address, port: Number(port) };
-		const socket = connect(addr);
-		const writer = socket.writable.getWriter();
-		const reader = socket.readable.getReader();
-
-		// handshake packet
-		// 1.sent
-		const handshake = handshakePacket();
-		console.log(`handshake sent ${handshake}`);
-		await writer.write(handshake);
-		await new Promise((resolve) => setTimeout(resolve, 1000));
-		// 2.receive
-		const status = await new Promise(async (resolve) => {
-			while (true) {
-				const packet = (await reader.read()) as ReadableStreamReadResult<Uint8Array>;
-				let buf = packet.value;
-				if (buf == undefined) {
-					continue;
-				}
-				console.log(`handshake receive ${buf}`);
-
-				const dataLen = readVarInt(buf);
-				buf = dataLen.data;
-				const packetId = readVarInt(buf);
-				buf = packetId.data;
-				const statusLen = readVarInt(buf);
-				buf = statusLen.data;
-				const statusRaw = new TextDecoder().decode(buf);
-				const status = JSON.parse(statusRaw);
-				resolve(status);
+		// DNS resolve
+		const target = await fetch(`https://cloudflare-dns.com/dns-query?name=_minecraft._tcp.${address}&type=SRV`, {
+			headers: {
+				Accept: 'application/dns-json',
+			},
+		}).then(async (res) => {
+			const resolved = (await res.json()) as unknown as DNSresolve;
+			if (!resolved.Answer) {
+				// SRV record not found
+				return { hostname: address, port: Number(port) };
 			}
+			// [0]: Priority,[1]: Weight,[2]: Port,[3]: Target
+			const info = resolved.Answer[0].data.split(' ');
+			return { hostname: info[3], port: Number(info[2]) };
 		});
+		// connect to server
+		const socket: Socket | null = await new Promise(async (resolve, reject) => {
+			const timer = setTimeout(() => {
+				reject('timed out');
+			}, 1000);
+			const socket = connect(target);
+			await socket.opened.then(() => {
+				clearTimeout(timer);
+				resolve(socket);
+			});
+		})
+			.then((socket) => {
+				return socket as Socket;
+			})
+			.catch(() => {
+				return null;
+			});
+		if (!socket) {
+			return Return({
+				success: false,
+				message: 'connection timed out',
+			} as result);
+		}
 
-		return Return({
-			message: `${address}:${port} connected`,
-			data: status,
-		} as result);
+		// negotiation to server
+		try {
+			const writer = socket.writable.getWriter();
+			const reader = socket.readable.getReader();
+
+			// handshake packet
+			// 1.sent
+			const handshake = handshakePacket();
+			console.log(`handshake sent ${handshake}`);
+			await writer.write(handshake);
+			await sleep(100);
+			// 2.receive
+			const status = await new Promise(async (resolve) => {
+				while (true) {
+					const packet = (await reader.read()) as ReadableStreamReadResult<Uint8Array>;
+					let buf = packet.value;
+					if (buf == undefined) {
+						continue;
+					}
+					console.log(`handshake receive ${buf}`);
+
+					const dataLen = readVarInt(buf);
+					buf = dataLen.data;
+					const packetId = readVarInt(buf);
+					buf = packetId.data;
+					const statusLen = readVarInt(buf);
+					buf = statusLen.data;
+					const statusRaw = new TextDecoder().decode(buf);
+					const status = JSON.parse(statusRaw);
+					resolve(status);
+				}
+			});
+
+			await socket.close();
+			return Return({
+				success: true,
+				message: `${address}:${port} connected`,
+				data: status,
+			} as result);
+		} catch (e) {
+			return Return({
+				success: false,
+				message: `connection failed: ${e}`,
+			} as result);
+		}
 	},
 } satisfies ExportedHandler<Env>;
 
