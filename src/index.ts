@@ -196,27 +196,35 @@ function readVarInt(data: Uint8Array): readResult<number> {
 	};
 }
 
-function handshakePacket(): Uint8Array {
+function handshakePacket(target: SocketAddress): Uint8Array {
 	let data = new Uint8Array();
 
-	const packetId = writeVarInt(0);
-	data = concatUint8Array(data, packetId);
 	const protocolVer = writeVarInt(3);
 	data = concatUint8Array(data, protocolVer);
-	const address = new TextEncoder().encode('mc-status.example.com');
+	const address = new TextEncoder().encode(target.hostname);
 	const addressLen = writeVarInt(address.length);
 	data = concatUint8Array(data, addressLen);
 	data = concatUint8Array(data, address);
 	const port = new Uint8Array(2);
-	new DataView(port.buffer).setUint16(0, 25565);
+	new DataView(port.buffer).setUint16(0, target.port);
 	data = concatUint8Array(data, port);
 	const next = writeVarInt(1);
 	data = concatUint8Array(data, next);
-	const length = writeVarInt(data.length);
+
+	return packetGenerator(0x00, data);
+}
+
+function packetGenerator(packetID: number, data: Uint8Array): Uint8Array {
+	let buf = new Uint8Array();
+	const packetId = writeVarInt(packetID);
+	buf = concatUint8Array(buf, packetId);
+	buf = concatUint8Array(buf, data);
 
 	let packet = new Uint8Array();
+	const length = writeVarInt(buf.length);
 	packet = concatUint8Array(packet, length);
-	packet = concatUint8Array(packet, data);
+	packet = concatUint8Array(packet, buf);
+
 	return packet;
 }
 
