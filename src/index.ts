@@ -74,11 +74,15 @@ export default {
 		// connect to server
 		const socket: Socket | null = await new Promise(async (resolve, reject) => {
 			const timer = setTimeout(() => {
+				console.log(`connection timed out`);
 				reject('timed out');
 			}, 1000);
+
+			console.log(`connect to: ${JSON.stringify(target)}`);
 			const socket = connect(target);
 			await socket.opened.then(() => {
 				clearTimeout(timer);
+				console.log(`connection success`);
 				resolve(socket);
 			});
 		})
@@ -100,13 +104,23 @@ export default {
 			const writer = socket.writable.getWriter();
 			const reader = socket.readable.getReader();
 
-			// handshake packet
-			// 1.sent
-			const handshake = handshakePacket();
-			console.log(`handshake sent ${handshake}`);
+			// server status request
+			// 1.sent handshake
+			const handshake = handshakePacket(target);
+			console.log(`handshake sent: ${handshake}`);
 			await writer.write(handshake);
 			await sleep(100);
-			// 2.receive
+			// 2.sent status request
+			const statusRequest = packetGenerator(0x00, new Uint8Array());
+			await writer.write(statusRequest);
+			await sleep(50);
+			// 3.sent ping request
+			const timestamp = new Uint8Array(8);
+			new DataView(timestamp.buffer).setBigInt64(0, BigInt(new Date().getTime()));
+			const pingRequest = packetGenerator(0x01, timestamp);
+			await writer.write(pingRequest);
+			await sleep(50);
+			// 4.receive
 			const status = await new Promise(async (resolve) => {
 				while (true) {
 					const packet = (await reader.read()) as ReadableStreamReadResult<Uint8Array>;
@@ -114,7 +128,7 @@ export default {
 					if (buf == undefined) {
 						continue;
 					}
-					console.log(`handshake receive ${buf}`);
+					console.log(`handshake receive: ${buf}`);
 
 					const dataLen = readVarInt(buf);
 					buf = dataLen.data;
