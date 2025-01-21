@@ -48,6 +48,7 @@ interface readResult<T> {
 	dataLength: number;
 	value: T;
 }
+
 export default {
 	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
 		const url = new URL(request.url);
@@ -56,7 +57,7 @@ export default {
 		if (!address) {
 			return Return({
 				success: false,
-				message: 'address params not found.',
+				message: 'address params not found',
 			} as result);
 		}
 		const port = params.get('port') || '25565';
