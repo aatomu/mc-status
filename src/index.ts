@@ -72,7 +72,7 @@ export default {
 		}
 
 		// connect to server
-		const socket: Socket | null = await new Promise(async (resolve, reject) => {
+		const socket = await new Promise(async (resolve, reject) => {
 			const timer = setTimeout(() => {
 				console.log(`connection timed out`);
 				reject('timed out');
@@ -106,7 +106,7 @@ export default {
 
 			// server status request
 			// 1.sent handshake
-			const handshake = handshakePacket(target);
+			const handshake = handshakePacket(address, target.port);
 			console.log(`handshake sent: ${handshake}`);
 			await writer.write(handshake);
 			await sleep(100);
@@ -120,29 +120,48 @@ export default {
 			const pingRequest = packetGenerator(0x01, timestamp);
 			await writer.write(pingRequest);
 			await sleep(50);
+
 			// 4.receive
-			const status = await new Promise(async (resolve) => {
-				while (true) {
-					const packet = (await reader.read()) as ReadableStreamReadResult<Uint8Array>;
-					let buf = packet.value;
-					if (buf == undefined) {
-						continue;
-					}
-					console.log(`handshake receive: ${buf}`);
+			const status = await new Promise(async (resolve, reject) => {
+				const ticker = setTimeout(reject, 500);
 
-					const dataLen = readVarInt(buf);
-					buf = dataLen.data;
-					const packetId = readVarInt(buf);
-					buf = packetId.data;
-					const statusLen = readVarInt(buf);
-					buf = statusLen.data;
-					const statusRaw = new TextDecoder().decode(buf);
-					const status = JSON.parse(statusRaw);
-					resolve(status);
+				const packet = (await reader.read()) as ReadableStreamReadResult<Uint8Array>;
+				clearTimeout(ticker);
+				let buf = packet.value;
+				if (buf == undefined) {
+					reject;
+					return;
 				}
-			});
+				console.log(`handshake receive: ${buf}`);
 
-			await socket.close();
+				const dataLen = readVarInt(buf);
+				buf = dataLen.data;
+				const packetId = readVarInt(buf);
+				buf = packetId.data;
+				const statusLen = readVarInt(buf);
+				buf = statusLen.data;
+				const statusRaw = new TextDecoder().decode(buf.buffer);
+				const status = JSON.parse(statusRaw);
+
+				resolve(status);
+				return;
+			})
+				.then((status) => {
+					return status as object;
+				})
+				.catch(() => {
+					return undefined;
+				});
+
+			socket.close();
+
+			if (status == undefined) {
+				return Return({
+					success: false,
+					message: `server response missing`,
+				} as result);
+			}
+
 			return Return({
 				success: true,
 				message: `${address}:${port} connected`,
@@ -182,17 +201,11 @@ async function DNSresolve(address: string, port: number): Promise<SocketAddress 
 		const answer = resolved.Answer;
 		console.log(`A/CNAME resolve success: ${JSON.stringify(answer)}`);
 		switch (answer[0].type) {
-			// // A record
-			// case 1: {
-			// 	console.log(`A record: ${answer[0].name}`);
-			// 	return { hostname: answer[0].data, port: port };
-			// }
 			// CNAME record
 			case 5: {
 				const aliasedDomain = answer[0].data.replace(/\.$/, '');
-				console.log(`CNAME record: ${answer[0].name}`);
+				console.log(`CNAME record: ${answer[0].name}=>${answer[0].data}`);
 				return { hostname: aliasedDomain, port: port };
-				// return await DNSresolve(aliasedDomain, port);
 			}
 		}
 		return undefined;
@@ -217,6 +230,7 @@ async function DNSresolve(address: string, port: number): Promise<SocketAddress 
 		console.log(`SRV resolve success: ${JSON.stringify(answer)}`);
 
 		const info = answer[0].data.split(' ');
+		console.log(`CNAME record: ${address}=>${info[3]}:${info[2]}`);
 
 		return { hostname: info[3], port: Number(info[2]) };
 	});
@@ -264,18 +278,18 @@ function readVarInt(data: Uint8Array): readResult<number> {
 	};
 }
 
-function handshakePacket(target: SocketAddress): Uint8Array {
+function handshakePacket(address: string, port: number): Uint8Array {
 	let data = new Uint8Array();
 
 	const protocolVer = writeVarInt(3);
 	data = concatUint8Array(data, protocolVer);
-	const address = new TextEncoder().encode(target.hostname);
-	const addressLen = writeVarInt(address.length);
+	const addressBuf = new TextEncoder().encode(address);
+	const addressLen = writeVarInt(addressBuf.length);
 	data = concatUint8Array(data, addressLen);
-	data = concatUint8Array(data, address);
-	const port = new Uint8Array(2);
-	new DataView(port.buffer).setUint16(0, target.port);
-	data = concatUint8Array(data, port);
+	data = concatUint8Array(data, addressBuf);
+	const portBuf = new Uint8Array(2);
+	new DataView(portBuf.buffer).setUint16(0, port);
+	data = concatUint8Array(data, portBuf);
 	const next = writeVarInt(1);
 	data = concatUint8Array(data, next);
 
@@ -311,5 +325,5 @@ function pushUint8(from: Uint8Array, value: number): Uint8Array {
 }
 
 async function sleep(ms: number): Promise<unknown> {
-	return new Promise((resolve) => setTimeout(resolve, 1000));
+	return new Promise((resolve) => setTimeout(resolve, ms));
 }
