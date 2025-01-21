@@ -63,20 +63,14 @@ export default {
 		const port = params.get('port') || '25565';
 
 		// DNS resolve
-		const target = await fetch(`https://cloudflare-dns.com/dns-query?name=_minecraft._tcp.${address}&type=SRV`, {
-			headers: {
-				Accept: 'application/dns-json',
-			},
-		}).then(async (res) => {
-			const resolved = (await res.json()) as unknown as DNSresolve;
-			if (!resolved.Answer) {
-				// SRV record not found
-				return { hostname: address, port: Number(port) };
-			}
-			// [0]: Priority,[1]: Weight,[2]: Port,[3]: Target
-			const info = resolved.Answer[0].data.split(' ');
-			return { hostname: info[3], port: Number(info[2]) };
-		});
+		const target = await DNSresolve(address, Number(port));
+		if (target == undefined) {
+			return Return({
+				success: false,
+				message: 'DNS resolve failed',
+			} as result);
+		}
+
 		// connect to server
 		const socket: Socket | null = await new Promise(async (resolve, reject) => {
 			const timer = setTimeout(() => {
@@ -158,6 +152,66 @@ async function Return(r: result): Promise<Response> {
 	});
 }
 
+async function DNSresolve(address: string, port: number): Promise<SocketAddress | undefined> {
+	console.log(`A/CNAME record resolve request: ${address}`);
+	let resolve = await fetch(`https://cloudflare-dns.com/dns-query?name=${address}&type=CNAME`, {
+		headers: {
+			Accept: 'application/dns-json',
+		},
+	}).then(async (res) => {
+		const resolved = (await res.json()) as unknown as DNSresolve;
+		if (!resolved.Answer) {
+			console.log(`A/CNAME resolve failed`);
+			return undefined;
+		}
+
+		const answer = resolved.Answer;
+		console.log(`A/CNAME resolve success: ${JSON.stringify(answer)}`);
+		switch (answer[0].type) {
+			// // A record
+			// case 1: {
+			// 	console.log(`A record: ${answer[0].name}`);
+			// 	return { hostname: answer[0].data, port: port };
+			// }
+			// CNAME record
+			case 5: {
+				const aliasedDomain = answer[0].data.replace(/\.$/, '');
+				console.log(`CNAME record: ${answer[0].name}`);
+				return { hostname: aliasedDomain, port: port };
+				// return await DNSresolve(aliasedDomain, port);
+			}
+		}
+		return undefined;
+	});
+	if (resolve != undefined) {
+		return resolve;
+	}
+
+	console.log(`SRV record resolve request: ${address}`);
+	resolve = await fetch(`https://cloudflare-dns.com/dns-query?name=_minecraft._tcp.${address}&type=SRV`, {
+		headers: {
+			Accept: 'application/dns-json',
+		},
+	}).then(async (res) => {
+		const resolved = (await res.json()) as unknown as DNSresolve;
+		if (!resolved.Answer) {
+			console.log(`SRV resolve failed`);
+			return undefined;
+		}
+
+		const answer = resolved.Answer;
+		console.log(`SRV resolve success: ${JSON.stringify(answer)}`);
+
+		const info = answer[0].data.split(' ');
+
+		return { hostname: info[3], port: Number(info[2]) };
+	});
+	if (resolve != undefined) {
+		return resolve;
+	}
+
+	return undefined;
+}
 function writeVarInt(value: number): Uint8Array {
 	let buf = new Uint8Array();
 
