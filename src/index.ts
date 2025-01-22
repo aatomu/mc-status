@@ -44,8 +44,7 @@ interface DNSrecord {
 }
 
 interface readResult<T> {
-	data: Uint8Array;
-	dataLength: number;
+	length: number;
 	value: T;
 }
 
