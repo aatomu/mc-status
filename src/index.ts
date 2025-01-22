@@ -178,7 +178,7 @@ async function Return(r: result): Promise<Response> {
 }
 
 async function DNSresolve(address: string, port: number): Promise<SocketAddress | undefined> {
-	console.log(`A/CNAME record resolve request: ${address}`);
+	console.log(`CNAME record resolve request: ${address}`);
 	let resolve = await fetch(`https://cloudflare-dns.com/dns-query?name=${address}&type=CNAME`, {
 		headers: {
 			Accept: 'application/dns-json',
@@ -186,21 +186,15 @@ async function DNSresolve(address: string, port: number): Promise<SocketAddress 
 	}).then(async (res) => {
 		const resolved = (await res.json()) as unknown as DNSresolve;
 		if (!resolved.Answer) {
-			console.log(`A/CNAME resolve failed`);
+			console.log(`CNAME resolve failed`);
 			return undefined;
 		}
 
 		const answer = resolved.Answer;
-		console.log(`A/CNAME resolve success: ${JSON.stringify(answer)}`);
-		switch (answer[0].type) {
-			// CNAME record
-			case 5: {
-				const aliasedDomain = answer[0].data.replace(/\.$/, '');
-				console.log(`CNAME record: ${answer[0].name}=>${answer[0].data}`);
-				return { hostname: aliasedDomain, port: port };
-			}
-		}
-		return undefined;
+		console.log(`CNAME resolve success: ${JSON.stringify(answer)}`);
+		const aliasedDomain = answer[0].data.replace(/\.$/, '');
+		console.log(`CNAME record: ${answer[0].name}=>${answer[0].data}`);
+		return { hostname: aliasedDomain, port: port };
 	});
 	if (resolve != undefined) {
 		return resolve;
@@ -267,7 +261,7 @@ async function readVarInt(reader: ReadableStreamBYOBReader): Promise<readResult<
 
 	while (true) {
 		length++;
-		const data = await readN(reader,1);
+		const data = await readN(reader, 1);
 		const current = data[0];
 
 		value = value | ((current & segmentBit) << position);
