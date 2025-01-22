@@ -125,6 +125,7 @@ export default {
 		const params = new URLSearchParams(url.searchParams);
 		const address = params.get('address');
 		if (!address) {
+			console.log('address params not found');
 			return Return({
 				success: false,
 				message: 'address params not found',
@@ -134,7 +135,7 @@ export default {
 		const protocol = (() => {
 			const version = params.get('version');
 			if (!version) {
-				const latestVersion = Object.entries(protocolVersions)[0]
+				const latestVersion = Object.entries(protocolVersions)[0];
 				return latestVersion[1];
 			}
 			return protocolVersions[version];
@@ -144,6 +145,7 @@ export default {
 		// DNS resolve
 		const target = await DNSresolve(address, Number(port));
 		if (target == undefined) {
+			console.log('DNS resolve failed');
 			return Return({
 				success: false,
 				message: 'DNS resolve failed',
@@ -185,15 +187,13 @@ export default {
 
 			// server status request
 			// 1.sent handshake
-			const handshake = handshakePacket(protocol, address, target.port);
-			console.log(`sent handshake: ${handshake}`);
-			await writer.write(handshake);
-			await sleep(50);
+			const handshake = handshakePacket(protocol, target.hostname, target.port);
+			console.log(`sent handshake: ${handshake}/${hexDump(handshake)}`);
+			writer.write(handshake);
 			// 2.sent status request
 			const statusRequest = packetGenerator(0x00, new Uint8Array());
-			console.log(`sent status request: ${statusRequest}`);
-			await writer.write(statusRequest);
-			await sleep(50);
+			console.log(`sent status request: ${statusRequest}/${hexDump(statusRequest)}`);
+			writer.write(statusRequest);
 			// 3.sent ping
 			const timestamp = new Uint8Array(8);
 			new DataView(timestamp.buffer).setBigInt64(0, BigInt(new Date().getTime()));
@@ -203,6 +203,7 @@ export default {
 			await sleep(50);
 
 			// 4.receive
+			await sleep(100);
 			const status = await new Promise(async (resolve, reject) => {
 				const ticker = setTimeout(reject, 500);
 
@@ -230,9 +231,10 @@ export default {
 			socket.close();
 
 			if (status == undefined) {
+				console.log('server response timed out');
 				return Return({
 					success: false,
-					message: `server response missing`,
+					message: `server response timed out`,
 				} as result);
 			}
 
@@ -411,4 +413,12 @@ function pushUint8(from: Uint8Array, value: number): Uint8Array {
 
 async function sleep(ms: number): Promise<unknown> {
 	return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function hexDump(i: Uint8Array): string {
+	let text = '';
+	i.forEach((v) => {
+		text += v.toString(16).padStart(2, '0');
+	});
+	return text;
 }
