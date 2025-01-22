@@ -101,7 +101,7 @@ export default {
 		// negotiation to server
 		try {
 			const writer = socket.writable.getWriter();
-			const reader = socket.readable.getReader();
+			const reader = socket.readable.getReader({ mode: 'byob' });
 
 			// server status request
 			// 1.sent handshake
@@ -124,24 +124,17 @@ export default {
 			const status = await new Promise(async (resolve, reject) => {
 				const ticker = setTimeout(reject, 500);
 
-				const packet = (await reader.read()) as ReadableStreamReadResult<Uint8Array>;
-				clearTimeout(ticker);
-				let buf = packet.value;
-				if (buf == undefined) {
-					reject;
-					return;
-				}
-				console.log(`handshake receive: ${buf}`);
-
-				const dataLen = readVarInt(buf);
-				buf = dataLen.data;
-				const packetId = readVarInt(buf);
-				buf = packetId.data;
-				const statusLen = readVarInt(buf);
-				buf = statusLen.data;
-				const statusRaw = new TextDecoder().decode(buf.buffer);
+				const length = await readVarInt(reader);
+				console.log(`length:${length.value}`);
+				const packetId = await readVarInt(reader);
+				console.log(`packetID:${packetId.value}`);
+				console.log(`data: ${length.value - packetId.length}`);
+				const statusLen = await readVarInt(reader);
+				console.log(`statusLen:${statusLen.value}`);
+				const statusRaw = new TextDecoder().decode(await readN(reader, statusLen.value));
 				const status = JSON.parse(statusRaw);
 
+				clearTimeout(ticker);
 				resolve(status);
 				return;
 			})
@@ -253,26 +246,42 @@ function writeVarInt(value: number): Uint8Array {
 	}
 }
 
-function readVarInt(data: Uint8Array): readResult<number> {
+async function readN(reader: ReadableStreamBYOBReader, n: number): Promise<Uint8Array> {
+	let buffer = new ArrayBuffer(n);
+	let offset = 0;
+	while (offset < buffer.byteLength) {
+		const { done, value } = await reader.read(new Uint8Array(buffer, offset, buffer.byteLength - offset));
+		if (done) {
+			break;
+		}
+		buffer = value.buffer;
+		offset += value.byteLength;
+	}
+	return new Uint8Array(buffer);
+}
+
+async function readVarInt(reader: ReadableStreamBYOBReader): Promise<readResult<number>> {
 	let position = 0;
 	let length = 0;
 	let value = 0;
 
 	while (true) {
 		length++;
-		const current = data[position];
-		value = value | (current & (segmentBit << position));
+		const data = await readN(reader,1);
+		const current = data[0];
+
+		value = value | ((current & segmentBit) << position);
 		if ((current & continueBit) == 0) {
 			break;
 		}
 		position += 7;
+
 		if (position > 32) {
 			break;
 		}
 	}
 	return {
-		data: data.slice(length),
-		dataLength: length,
+		length: length,
 		value: value,
 	};
 }
