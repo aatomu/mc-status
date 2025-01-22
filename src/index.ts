@@ -187,7 +187,7 @@ export default {
 
 			// server status request
 			// 1.sent handshake
-			const handshake = handshakePacket(protocol, target.hostname, target.port);
+			const handshake = handshakePacket(protocol, address, target.port);
 			console.log(`sent handshake: ${handshake}/${hexDump(handshake)}`);
 			writer.write(handshake);
 			// 2.sent status request
@@ -263,8 +263,29 @@ async function Return(r: result): Promise<Response> {
 }
 
 async function DNSresolve(address: string, port: number): Promise<SocketAddress | undefined> {
+	console.log(`A record resolve request: ${address}`);
+	let resolve = await fetch(`https://cloudflare-dns.com/dns-query?name=${address}&type=A`, {
+		headers: {
+			Accept: 'application/dns-json',
+		},
+	}).then(async (res) => {
+		const resolved = (await res.json()) as unknown as DNSresolve;
+		if (!resolved.Answer || resolved.Answer[0].type != 1) {
+			console.log(`A resolve failed`);
+			return undefined;
+		}
+
+		const answer = resolved.Answer;
+		console.log(`A resolve success: ${JSON.stringify(answer)}`);
+
+		return { hostname: answer[0].data, port: port };
+	});
+	if (resolve != undefined) {
+		return resolve;
+	}
+
 	console.log(`CNAME record resolve request: ${address}`);
-	let resolve = await fetch(`https://cloudflare-dns.com/dns-query?name=${address}&type=CNAME`, {
+	resolve = await fetch(`https://cloudflare-dns.com/dns-query?name=${address}&type=CNAME`, {
 		headers: {
 			Accept: 'application/dns-json',
 		},
@@ -301,7 +322,7 @@ async function DNSresolve(address: string, port: number): Promise<SocketAddress 
 		console.log(`SRV resolve success: ${JSON.stringify(answer)}`);
 
 		const info = answer[0].data.split(' ');
-		console.log(`CNAME record: ${address}=>${info[3]}:${info[2]}`);
+		console.log(`SRV record: ${address}=>${info[3]}:${info[2]}`);
 
 		return { hostname: info[3], port: Number(info[2]) };
 	});
