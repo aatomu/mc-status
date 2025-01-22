@@ -73,7 +73,6 @@ export default {
 		// connect to server
 		const socket = await new Promise(async (resolve, reject) => {
 			const timer = setTimeout(() => {
-				console.log(`connection timed out`);
 				reject('timed out');
 			}, 1000);
 
@@ -92,6 +91,7 @@ export default {
 				return null;
 			});
 		if (!socket) {
+			console.log('connection timed out');
 			return Return({
 				success: false,
 				message: 'connection timed out',
@@ -105,19 +105,21 @@ export default {
 
 			// server status request
 			// 1.sent handshake
-			const handshake = handshakePacket(address, target.port);
-			console.log(`handshake sent: ${handshake}`);
+			const handshake = handshakePacket(target.hostname, target.port);
+			console.log(`sent handshake: ${handshake}`);
 			await writer.write(handshake);
-			await sleep(100);
+			await sleep(50);
 			// 2.sent status request
 			const statusRequest = packetGenerator(0x00, new Uint8Array());
+			console.log(`sent status request: ${statusRequest}`);
 			await writer.write(statusRequest);
 			await sleep(50);
-			// 3.sent ping request
+			// 3.sent ping
 			const timestamp = new Uint8Array(8);
 			new DataView(timestamp.buffer).setBigInt64(0, BigInt(new Date().getTime()));
-			const pingRequest = packetGenerator(0x01, timestamp);
-			await writer.write(pingRequest);
+			const ping = packetGenerator(0x01, timestamp);
+			console.log(`sent ping: ${ping}`);
+			await writer.write(ping);
 			await sleep(50);
 
 			// 4.receive
@@ -160,6 +162,7 @@ export default {
 				data: status,
 			} as result);
 		} catch (e) {
+			console.log(`connection failed: ${e}`);
 			return Return({
 				success: false,
 				message: `connection failed: ${e}`,
