@@ -6,7 +6,7 @@ const continueBit = 0x80;
 interface result {
 	success: boolean;
 	message: string;
-	data: any;
+	data?: minecraftStatus;
 }
 
 // https://developers.cloudflare.com/1.1.1.1/encryption/dns-over-https/make-api-requests/dns-json/#response-fields
@@ -41,6 +41,29 @@ interface DNSrecord {
 	type: number;
 	TTL: number;
 	data: string;
+}
+
+interface minecraftStatus {
+	version: {
+		name: string;
+		protocol: number;
+	};
+	players: {
+		max: number;
+		online: number;
+		sample: {
+			name: string;
+			id: string;
+		}[];
+	};
+	description:
+		| string
+		| {
+				text: string;
+				//and other json decoration
+		  }[];
+	favicon?: string;
+	enforcesSecureChat: boolean;
 }
 
 interface readResult<T> {
@@ -123,10 +146,16 @@ export default {
 	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
 		const url = new URL(request.url);
 		const params = new URLSearchParams(url.searchParams);
+
+		const icon = params.get('icon') || null;
+		if (icon) {
+			return fetch(decodeURIComponent(icon));
+		}
+		const type = params.get('type') || 'html';
 		const address = params.get('address');
 		if (!address) {
 			console.log('address params not found');
-			return Return({
+			return Return(url, type, 'unknown server', {
 				success: false,
 				message: 'address params not found',
 			} as result);
@@ -146,7 +175,7 @@ export default {
 		const target = await DNSresolve(address, Number(port));
 		if (target == undefined) {
 			console.log('DNS resolve failed');
-			return Return({
+			return Return(url, type, address, {
 				success: false,
 				message: 'DNS resolve failed',
 			} as result);
@@ -174,7 +203,7 @@ export default {
 			});
 		if (!socket) {
 			console.log('connection timed out');
-			return Return({
+			return Return(url, type, address, {
 				success: false,
 				message: 'connection timed out',
 			} as result);
@@ -222,7 +251,7 @@ export default {
 				return;
 			})
 				.then((status) => {
-					return status as object;
+					return status as minecraftStatus;
 				})
 				.catch(() => {
 					return undefined;
@@ -232,20 +261,20 @@ export default {
 
 			if (status == undefined) {
 				console.log('server response timed out');
-				return Return({
+				return Return(url, type, address, {
 					success: false,
 					message: `server response timed out`,
 				} as result);
 			}
 
-			return Return({
+			return Return(url, type, address, {
 				success: true,
 				message: `${address}:${port} connected`,
 				data: status,
 			} as result);
 		} catch (e) {
 			console.log(`connection failed: ${e}`);
-			return Return({
+			return Return(url, type, address, {
 				success: false,
 				message: `connection failed: ${e}`,
 			} as result);
@@ -253,13 +282,76 @@ export default {
 	},
 } satisfies ExportedHandler<Env>;
 
-async function Return(r: result): Promise<Response> {
-	return new Response(JSON.stringify(r, null, '  '), {
-		headers: {
-			'Content-Type': 'application/json',
-			'Access-Control-Allow-Methods': 'GET',
-		},
-	});
+async function Return(url: URL, type: string, address: string, r: result): Promise<Response> {
+	switch (type) {
+		case 'json': {
+			return new Response(JSON.stringify(r, null, '  '), {
+				headers: {
+					'Content-Type': 'application/json',
+					'Access-Control-Allow-Methods': 'GET',
+					'Access-Control-Allow-Origin': '*',
+					'Cache-Control': 'private, no-cache, no-store, must-revalidate',
+					Pragma: 'no-cache',
+				},
+			});
+		}
+
+		default:
+			let description = [];
+			description.push(`Player: ${r.data?.players.online} / ${r.data?.players.max} `);
+			description.push(`(${r.data?.players.sample.map((v) => v.name).join(',')})`);
+			description.push(``);
+			description.push(`MOTD:`);
+			description.push(
+				typeof r.data?.description == 'string'
+					? r.data?.description
+					: r.data?.description
+							.map((v) => {
+								return v['text'];
+							})
+							.join('')
+			);
+
+			let favicon = r.data?.favicon;
+			if (favicon) {
+				favicon = encodeURIComponent(favicon);
+			}
+			let html = [];
+			html.push(`<!DOCTYPE html>`);
+			html.push(`<html lang="en">`);
+			html.push(`  <head>`);
+			html.push(`    <title>${address}</title>`);
+			html.push(`    <meta charset="utf-8">`);
+			html.push(`    <meta name="theme-color" content="#1E90FF">`);
+			html.push(`    <link href="${url.origin}/favicon.png?icon=${favicon}" rel="icon">`);
+			html.push(`    <meta property="og:image" content="${url.origin}/favicon.png?icon=${favicon}" />`);
+			html.push(`    <meta property="og:type" content="website" />`);
+			html.push(`    <meta property="og:title" content="${address}" />`);
+			html.push(`    <meta property="og:site_name" content="mc-status" />`);
+			html.push(`    <meta property="og:description" content="${description.join('\n')}" />`);
+			html.push(`    <meta name="twitter:card" content="summary" />`);
+			html.push(`    <meta name="twitter:site" content="@aatomu" />`);
+			html.push(`    <meta name="twitter:creator" content="@aatomu21263" />`);
+			html.push(`  </head>`);
+			html.push(`  <body>`);
+			html.push(`    <pre>`);
+			html.push(`      <code>`);
+			html.push(`        ${JSON.stringify(r, null, '  ')}`);
+			html.push(`      </code>`);
+			html.push(`    </pre>`);
+			html.push(`  </body>`);
+			html.push(`</html>`);
+
+			return new Response(html.join('\n'), {
+				headers: {
+					'Content-Type': 'text/html',
+					'Access-Control-Allow-Methods': 'GET',
+					'Access-Control-Allow-Origin': '*',
+					'Cache-Control': 'private, no-cache, no-store, must-revalidate',
+					Pragma: 'no-cache',
+				},
+			});
+	}
 }
 
 async function DNSresolve(address: string, port: number): Promise<SocketAddress | undefined> {
@@ -332,6 +424,7 @@ async function DNSresolve(address: string, port: number): Promise<SocketAddress 
 
 	return undefined;
 }
+
 function writeVarInt(value: number): Uint8Array {
 	let buf = new Uint8Array();
 
