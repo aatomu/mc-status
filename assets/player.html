@@ -1,244 +1,291 @@
 <!DOCTYPE html>
 
 <head>
-  <meta charset="utf-8">
-  <title>Minecraft Player Stats Viewer</title>
+	<meta charset="utf-8">
+	<title>Minecraft Player Stats Viewer</title>
 </head>
 <style>
-  table {
-    border-spacing: 0;
-    border-color: black;
-    border-width: 2px;
-    border-style: solid;
-  }
+	table {
+		border-spacing: 0;
+		border-color: black;
+		border-width: 2px;
+		border-style: solid;
+	}
 
-  td,
-  th {
-    border-color: gray;
-    border-width: 0 1px;
-    border-style: solid;
-  }
+	td,
+	th {
+		border-color: gray;
+		border-width: 0 1px;
+		border-style: solid;
+	}
 
-  .header {
-    background-color: aqua;
-    position: -webkit-sticky;
-    position: sticky;
-    top: 0;
-    z-index: 10;
-  }
+	.header {
+		background-color: aqua;
+		position: -webkit-sticky;
+		position: sticky;
+		top: 0;
+		z-index: 10;
+	}
 
-  .is-sort-type {
-    color: blue
-  }
+	.is-sort-type {
+		color: blue
+	}
 
-  tr:nth-child(2n+1) {
-    background: #F0FFFF;
-  }
+	tr:nth-child(2n+1) {
+		background: #F0FFFF;
+	}
 
 
-  .center {
-    text-align: center;
-  }
+	.center {
+		text-align: center;
+	}
 
-  .right {
-    text-align: right;
-  }
+	.right {
+		text-align: right;
+	}
 
-  .left {
-    text-align: left;
-  }
+	.left {
+		text-align: left;
+	}
 </style>
 
 <body>
-  <input type="file" id="input" accept="application/json">
-  <br><br>
-  <span id="version"></span>
-  <br><br>
+	<input type="file" id="input" accept="application/json">
+	<br><br>
+	<span id="version"></span>
+	<br><br>
 
-  <table>
-    <thead>
-      <tr class="center header">
-        <th onclick='generate("name")' id="name">Item ID</th>
-        <th onclick='generate("mined")' id="mined">Mined</th>
-        <th onclick='generate("broken")' id="broken">Broken</th>
-        <th onclick='generate("crafted")' id="crafted">Crafted</th>
-        <th onclick='generate("used")' id="used">Used</th>
-        <th onclick='generate("picked_up")' id="picked_up">Picked up</th>
-        <th onclick='generate("dropped")' id="dropped">Dropped</th>
-      </tr>
-    </thead>
-    <tbody id="table">
-    </tbody>
-  </table>
+	<table>
+		<thead>
+			<tr class="center header">
+				<th onclick='generate("name")' id="name">Item ID</th>
+				<th onclick='generate("mined")' id="mined">Mined</th>
+				<th onclick='generate("broken")' id="broken">Broken</th>
+				<th onclick='generate("crafted")' id="crafted">Crafted</th>
+				<th onclick='generate("used")' id="used">Used</th>
+				<th onclick='generate("picked_up")' id="picked_up">Picked up</th>
+				<th onclick='generate("dropped")' id="dropped">Dropped</th>
+			</tr>
+		</thead>
+		<tbody id="table">
+		</tbody>
+	</table>
 </body>
 
 <script>
-  // @ts-check
-  /**
-   * @type HTMLInputElement
-  */
-  // @ts-ignore
-  const input = document.getElementById("input")
-  /**
-   * @type HTMLTableElement
-  */
-  // @ts-ignore
-  const table = document.getElementById("table")
-  /**
-   * @type HTMLSpanElement
-  */
-  // @ts-ignore
-  const version = document.getElementById("version")
+	// @ts-check
+	/**
+	 * @type HTMLInputElement
+	*/
+	// @ts-ignore
+	const input = document.getElementById("input")
+	/**
+	 * @type HTMLTableElement
+	*/
+	// @ts-ignore
+	const table = document.getElementById("table")
+	/**
+	 * @type HTMLSpanElement
+	*/
+	// @ts-ignore
+	const version = document.getElementById("version")
 
-  var itemList = {}
-  input.addEventListener("change", async (e) => {
-    if (!input.files) return
-    const file = input.files[0]
-    const stat = JSON.parse(await file.text())
-    version.innerText = `version: ${stat.DataVersion}`
+	var itemList = {}
+	input.addEventListener("change", async (e) => {
+		if (!input.files) return
+		const file = input.files[0]
+		const stat = JSON.parse(await file.text())
 
-    // Load items
-    Object.keys(stat.stats["minecraft:mined"]).forEach((id) => {
-      console.log(`Mined: ${id}=${stat.stats["minecraft:mined"][id]}`)
-      if (!itemList[id]) itemList[id] = { mined: 0, broken: 0, crafted: 0, used: 0, picked_up: 0, dropped: 0 }
-      itemList[id].mined = stat.stats["minecraft:mined"][id]
-    })
-    Object.keys(stat.stats["minecraft:broken"]).forEach((id) => {
-      console.log(`Broken: ${id}=${stat.stats["minecraft:broken"][id]}`)
-      if (!itemList[id]) itemList[id] = { mined: 0, broken: 0, crafted: 0, used: 0, picked_up: 0, dropped: 0 }
-      itemList[id].broken = stat.stats["minecraft:broken"][id]
-    })
-    Object.keys(stat.stats["minecraft:crafted"]).forEach((id) => {
-      console.log(`Crafted: ${id}=${stat.stats["minecraft:crafted"][id]}`)
-      if (!itemList[id]) itemList[id] = { mined: 0, broken: 0, crafted: 0, used: 0, picked_up: 0, dropped: 0 }
-      itemList[id].crafted = stat.stats["minecraft:crafted"][id]
-    })
-    Object.keys(stat.stats["minecraft:used"]).forEach((id) => {
-      console.log(`Used: ${id}=${stat.stats["minecraft:used"][id]}`)
-      if (!itemList[id]) itemList[id] = { mined: 0, broken: 0, crafted: 0, used: 0, picked_up: 0, dropped: 0 }
-      itemList[id].used = stat.stats["minecraft:used"][id]
-    })
-    Object.keys(stat.stats["minecraft:picked_up"]).forEach((id) => {
-      console.log(`Picked Up: ${id}=${stat.stats["minecraft:picked_up"][id]}`)
-      if (!itemList[id]) itemList[id] = { mined: 0, broken: 0, crafted: 0, used: 0, picked_up: 0, dropped: 0 }
-      itemList[id].picked_up = stat.stats["minecraft:picked_up"][id]
-    })
-    Object.keys(stat.stats["minecraft:dropped"]).forEach((id) => {
-      console.log(`Dropped: ${id}=${stat.stats["minecraft:dropped"][id]}`)
-      if (!itemList[id]) itemList[id] = { mined: 0, broken: 0, crafted: 0, used: 0, picked_up: 0, dropped: 0 }
-      itemList[id].dropped = stat.stats["minecraft:dropped"][id]
-    })
+		// Load items
+		if ("DataVersion" in stat) {
+			version.innerText = `version: ${stat.DataVersion}`
+			Object.keys(stat.stats["minecraft:mined"]).forEach((id) => {
+				console.log(`Mined: ${id}=${stat.stats["minecraft:mined"][id]}`)
+				if (!itemList[id]) itemList[id] = { mined: 0, broken: 0, crafted: 0, used: 0, picked_up: 0, dropped: 0 }
+				itemList[id].mined = stat.stats["minecraft:mined"][id]
+			})
+			Object.keys(stat.stats["minecraft:broken"]).forEach((id) => {
+				console.log(`Broken: ${id}=${stat.stats["minecraft:broken"][id]}`)
+				if (!itemList[id]) itemList[id] = { mined: 0, broken: 0, crafted: 0, used: 0, picked_up: 0, dropped: 0 }
+				itemList[id].broken = stat.stats["minecraft:broken"][id]
+			})
+			Object.keys(stat.stats["minecraft:crafted"]).forEach((id) => {
+				console.log(`Crafted: ${id}=${stat.stats["minecraft:crafted"][id]}`)
+				if (!itemList[id]) itemList[id] = { mined: 0, broken: 0, crafted: 0, used: 0, picked_up: 0, dropped: 0 }
+				itemList[id].crafted = stat.stats["minecraft:crafted"][id]
+			})
+			Object.keys(stat.stats["minecraft:used"]).forEach((id) => {
+				console.log(`Used: ${id}=${stat.stats["minecraft:used"][id]}`)
+				if (!itemList[id]) itemList[id] = { mined: 0, broken: 0, crafted: 0, used: 0, picked_up: 0, dropped: 0 }
+				itemList[id].used = stat.stats["minecraft:used"][id]
+			})
+			Object.keys(stat.stats["minecraft:picked_up"]).forEach((id) => {
+				console.log(`Picked Up: ${id}=${stat.stats["minecraft:picked_up"][id]}`)
+				if (!itemList[id]) itemList[id] = { mined: 0, broken: 0, crafted: 0, used: 0, picked_up: 0, dropped: 0 }
+				itemList[id].picked_up = stat.stats["minecraft:picked_up"][id]
+			})
+			Object.keys(stat.stats["minecraft:dropped"]).forEach((id) => {
+				console.log(`Dropped: ${id}=${stat.stats["minecraft:dropped"][id]}`)
+				if (!itemList[id]) itemList[id] = { mined: 0, broken: 0, crafted: 0, used: 0, picked_up: 0, dropped: 0 }
+				itemList[id].dropped = stat.stats["minecraft:dropped"][id]
+			})
+		} else {
+			version.innerText = `version: old format(unknown)`
+			Object.keys(stat).forEach((name) => {
+				const data = name.replace("stat.", "").match(/(^.+?)\.(.+)/)
+				if (!data) {
+					return
+				}
+				const type = data[1]
+				console.log(data)
+				const id = data[2].replace("minecraft.", "minecraft:")
 
-    console.log(itemList)
-  })
+				switch (type) {
+					case "mineBlock":
+						console.log(`Mined: ${id}=${stat[name]}`)
+						if (!itemList[id]) itemList[id] = { mined: 0, broken: 0, crafted: 0, used: 0, picked_up: 0, dropped: 0 }
+						itemList[id].mined = stat[name]
+						break
+					case "breakItem":
+						console.log(`Broken: ${id}=${stat[name]}`)
+						if (!itemList[id]) itemList[id] = { mined: 0, broken: 0, crafted: 0, used: 0, picked_up: 0, dropped: 0 }
+						itemList[id].broken = stat[name]
+						break
+					case "craftItem":
+						console.log(`Crafted: ${id}=${stat[name]}`)
+						if (!itemList[id]) itemList[id] = { mined: 0, broken: 0, crafted: 0, used: 0, picked_up: 0, dropped: 0 }
+						itemList[id].crafted = stat[name]
+						break
+					case "useItem":
+						console.log(`Used: ${id}=${stat[name]}`)
+						if (!itemList[id]) itemList[id] = { mined: 0, broken: 0, crafted: 0, used: 0, picked_up: 0, dropped: 0 }
+						itemList[id].used = stat[name]
+						break
+					case "pickup":
+						console.log(`Picked Up: ${id}=${stat[name]}`)
+						if (!itemList[id]) itemList[id] = { mined: 0, broken: 0, crafted: 0, used: 0, picked_up: 0, dropped: 0 }
+						itemList[id].picked_up = stat[name]
+						break
+					case "drop":
+						console.log(`Dropped: ${id}=${stat[name]}`)
+						if (!itemList[id]) itemList[id] = { mined: 0, broken: 0, crafted: 0, used: 0, picked_up: 0, dropped: 0 }
+						itemList[id].dropped = stat[name]
+						break
+				}
+			})
+		}
 
-  function updateSortInfo(name) {
-    const prev = document.querySelector(".is-sort-type")
-    if (prev) prev.classList.remove("is-sort-type")
-    const next = document.getElementById(name)
-    if (next) next.classList.add("is-sort-type")
-  }
-  function generate(sortType) {
-    let itemIdList = Object.keys(itemList)
-    switch (sortType) {
-      case "name":
-        updateSortInfo("name")
-        itemIdList.sort()
-        break
-      case "mined":
-        updateSortInfo("mined")
-        itemIdList.sort((a, b) => {
-          if (itemList[a].mined > itemList[b].mined) {
-            return -1
-          }
-          return 1
-        })
-        break
-      case "broken":
-        updateSortInfo("broken")
-        itemIdList.sort((a, b) => {
-          if (itemList[a].broken > itemList[b].broken) {
-            return -1
-          }
-          return 1
-        })
-        break
-      case "crafted":
-        updateSortInfo("crafted")
-        itemIdList.sort((a, b) => {
-          if (itemList[a].crafted > itemList[b].crafted) {
-            return -1
-          }
-          return 1
-        })
-        break
-      case "used":
-        updateSortInfo("used")
-        itemIdList.sort((a, b) => {
-          if (itemList[a].used > itemList[b].used) {
-            return -1
-          }
-          return 1
-        })
-        break
-      case "picked_up":
-        updateSortInfo("picked_up")
-        itemIdList.sort((a, b) => {
-          if (itemList[a].picked_up > itemList[b].picked_up) {
-            return -1
-          }
-          return 1
-        })
-        break
-      case "dropped":
-        updateSortInfo("dropped")
-        itemIdList.sort((a, b) => {
-          if (itemList[a].dropped > itemList[b].dropped) {
-            return -1
-          }
-          return 1
-        })
-        break
-    }
+		console.log(itemList)
+		generate("name")
+	})
 
-    console.log(itemIdList)
-    while (table.children.length > 0) {
-      table.children[0].remove()
-    }
+	function updateSortInfo(name) {
+		const prev = document.querySelector(".is-sort-type")
+		if (prev) prev.classList.remove("is-sort-type")
+		const next = document.getElementById(name)
+		if (next) next.classList.add("is-sort-type")
+	}
+	function generate(sortType) {
+		let itemIdList = Object.keys(itemList)
+		switch (sortType) {
+			case "name":
+				updateSortInfo("name")
+				itemIdList.sort()
+				break
+			case "mined":
+				updateSortInfo("mined")
+				itemIdList.sort((a, b) => {
+					if (itemList[a].mined > itemList[b].mined) {
+						return -1
+					}
+					return 1
+				})
+				break
+			case "broken":
+				updateSortInfo("broken")
+				itemIdList.sort((a, b) => {
+					if (itemList[a].broken > itemList[b].broken) {
+						return -1
+					}
+					return 1
+				})
+				break
+			case "crafted":
+				updateSortInfo("crafted")
+				itemIdList.sort((a, b) => {
+					if (itemList[a].crafted > itemList[b].crafted) {
+						return -1
+					}
+					return 1
+				})
+				break
+			case "used":
+				updateSortInfo("used")
+				itemIdList.sort((a, b) => {
+					if (itemList[a].used > itemList[b].used) {
+						return -1
+					}
+					return 1
+				})
+				break
+			case "picked_up":
+				updateSortInfo("picked_up")
+				itemIdList.sort((a, b) => {
+					if (itemList[a].picked_up > itemList[b].picked_up) {
+						return -1
+					}
+					return 1
+				})
+				break
+			case "dropped":
+				updateSortInfo("dropped")
+				itemIdList.sort((a, b) => {
+					if (itemList[a].dropped > itemList[b].dropped) {
+						return -1
+					}
+					return 1
+				})
+				break
+		}
 
-    itemIdList.forEach((id) => {
-      const tr = document.createElement("tr")
+		console.log(itemIdList)
+		while (table.children.length > 0) {
+			table.children[0].remove()
+		}
 
-      const name = document.createElement("td")
-      name.innerText = id
-      name.classList.add("left")
-      tr.append(name)
-      const mined = document.createElement("td")
-      mined.innerText = itemList[id].mined.toLocaleString()
-      mined.classList.add("right")
-      tr.append(mined)
-      const broken = document.createElement("td")
-      broken.innerText = itemList[id].broken.toLocaleString()
-      broken.classList.add("right")
-      tr.append(broken)
-      const crafted = document.createElement("td")
-      crafted.innerText = itemList[id].crafted.toLocaleString()
-      crafted.classList.add("right")
-      tr.append(crafted)
-      const used = document.createElement("td")
-      used.innerText = itemList[id].used.toLocaleString()
-      used.classList.add("right")
-      tr.append(used)
-      const picked_up = document.createElement("td")
-      picked_up.innerText = itemList[id].picked_up.toLocaleString()
-      picked_up.classList.add("right")
-      tr.append(picked_up)
-      const dropped = document.createElement("td")
-      dropped.innerText = itemList[id].dropped.toLocaleString()
-      dropped.classList.add("right")
-      tr.append(dropped)
+		itemIdList.forEach((id) => {
+			const tr = document.createElement("tr")
 
-      table.append(tr)
-    })
-  }
+			const name = document.createElement("td")
+			name.innerText = id
+			name.classList.add("left")
+			tr.append(name)
+			const mined = document.createElement("td")
+			mined.innerText = itemList[id].mined.toLocaleString()
+			mined.classList.add("right")
+			tr.append(mined)
+			const broken = document.createElement("td")
+			broken.innerText = itemList[id].broken.toLocaleString()
+			broken.classList.add("right")
+			tr.append(broken)
+			const crafted = document.createElement("td")
+			crafted.innerText = itemList[id].crafted.toLocaleString()
+			crafted.classList.add("right")
+			tr.append(crafted)
+			const used = document.createElement("td")
+			used.innerText = itemList[id].used.toLocaleString()
+			used.classList.add("right")
+			tr.append(used)
+			const picked_up = document.createElement("td")
+			picked_up.innerText = itemList[id].picked_up.toLocaleString()
+			picked_up.classList.add("right")
+			tr.append(picked_up)
+			const dropped = document.createElement("td")
+			dropped.innerText = itemList[id].dropped.toLocaleString()
+			dropped.classList.add("right")
+			tr.append(dropped)
+
+			table.append(tr)
+		})
+	}
 </script>
